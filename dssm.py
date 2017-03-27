@@ -21,14 +21,14 @@ start = time.time()
 
 TRIGRAM_D = 49284
 
-BS = 1000
+BS = 1
 
 L1_N = 400
 L2_N = 120
 
 query_in_shape = np.array([BS, TRIGRAM_D], np.int64)
 doc_in_shape = np.array([BS, TRIGRAM_D], np.int64)
-label_shape = np.array([BS, 1], np.int64)
+label_in_shape = np.array([BS, 1], np.int64)
 
 def variable_summaries(var, name):
     """Attach a lot of summaries to a Tensor."""
@@ -48,7 +48,7 @@ with tf.name_scope('input'):
     query_batch = tf.sparse_placeholder(tf.float32, shape=query_in_shape, name='QueryBatch')
     # Shape [BS, TRIGRAM_D]
     doc_batch = tf.sparse_placeholder(tf.float32, shape=doc_in_shape, name='DocBatch')
-    label_batch = tf.sparse_placeholder(tf.float32, shape=label_shape, name='LabelBatch')
+    label_batch = tf.sparse_placeholder(tf.float32, shape=label_in_shape, name='LabelBatch')
 
 with tf.name_scope('L1'):
     l1_par_range = np.sqrt(6.0 / (TRIGRAM_D + L1_N))
@@ -92,7 +92,7 @@ with tf.name_scope('Cosine_Similarity'):
 with tf.name_scope('Loss'):
     # Train Loss
     prob = tf.nn.softmax((cos_sim))
-    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(prob, label))
+    loss = -tf.reduce_sum(tf.log(prob)) / BS
     tf.scalar_summary('loss', loss)
 
 with tf.name_scope('Training'):
@@ -127,14 +127,19 @@ def data_iterator(file):
             us = user.split('\t')
             ns = news.split('\t')
             for j in range(1, len(us)):
-                u_indices.append([j,us[j]])
+                u_indices.append([i-index_start,us[j]])
             for j in range(1, len(ns)):
-                n_indices.append([j, ns[j]])
+                n_indices.append([i-index_start, ns[j]])
         u_values = np.ones(len(u_indices))
         n_values = np.ones(len(n_indices))
         u_indices = np.array(u_indices)
         n_indices = np.array(n_indices)
         label = np.array(labels)
+        #print u_indices
+        #print n_indices
+        #print u_values
+        #print n_values
+        #print label
         query_in = tf.SparseTensorValue(u_indices, u_values, [BS, TRIGRAM_D])
         doc_in =  tf.SparseTensorValue(n_indices, n_values, [BS, TRIGRAM_D])
         yield query_in, doc_in, label
@@ -156,9 +161,7 @@ with tf.Session(config=config) as sess:
     start = time.time()
     # fp_time = 0
     # fbp_time = 0
-    for 
-     in range(FLAGS.max_steps):
-        
+    for step in range(FLAGS.max_steps):
             # # setup toolbar
             # sys.stdout.write("[%s]" % (" " * toolbar_width))
             # #sys.stdout.flush()
@@ -182,7 +185,7 @@ with tf.Session(config=config) as sess:
         #        (fp_time / step, fbp_time / step))
 
 
-        if setp%50 == 0:
+        if step%50 == 0:
             end = time.time()
             epoch_loss = 0
             
