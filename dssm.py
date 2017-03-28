@@ -18,10 +18,10 @@ flags.DEFINE_bool('gpu', 1, "Enable GPU or not")
 
 start = time.time()
 
-
 TRIGRAM_D = 49284
 
-BS = 1
+NEG=50
+BS = 1000
 
 L1_N = 400
 L2_N = 120
@@ -78,21 +78,33 @@ with tf.name_scope('L2'):
     query_y = tf.nn.relu(query_l2)
     doc_y = tf.nn.relu(doc_l2)
 
+with tf.name_scope('FD_rotate'):
+    # Rotate FD+ to produce 50 FD-
+    temp = tf.tile(doc_y, [1, 1])
+
+    for i in range(NEG):
+        rand = int((random.random() + i) * BS / NEG)
+        doc_y = tf.concat(0,
+                          [doc_y,
+                           tf.slice(temp, [rand, 0], [BS - rand, -1]),
+                           tf.slice(temp, [0, 0], [rand, -1])])
 
 with tf.name_scope('Cosine_Similarity'):
     # Cosine similarity
-    query_norm = tf.sqrt(tf.reduce_sum(tf.square(query_y), 1, True))
+    query_norm = tf.tile(tf.sqrt(tf.reduce_sum(tf.square(query_y), 1, True)), [NEG + 1, 1])
     doc_norm = tf.sqrt(tf.reduce_sum(tf.square(doc_y), 1, True))
 
-    prod = tf.reduce_sum(tf.mul(query_y, doc_y), 1, True)
+    prod = tf.reduce_sum(tf.mul(tf.tile(query_y, [NEG + 1, 1]), doc_y), 1, True)
     norm_prod = tf.mul(query_norm, doc_norm)
 
-    cos_sim = tf.truediv(prod, norm_prod)
+    cos_sim_raw = tf.truediv(prod, norm_prod)
+    cos_sim = tf.transpose(tf.reshape(tf.transpose(cos_sim_raw), [NEG + 1, BS])) * 20
 
 with tf.name_scope('Loss'):
     # Train Loss
     prob = tf.nn.softmax((cos_sim))
-    loss = -tf.reduce_sum(tf.log(prob)) / BS
+    hit_prob = tf.slice(prob, [0, 0], [-1, 1])
+    loss = -tf.reduce_sum(tf.log(hit_prob)) / BS
     tf.scalar_summary('loss', loss)
 
 with tf.name_scope('Training'):
@@ -142,7 +154,7 @@ def data_iterator(file):
         #print label
         query_in = tf.SparseTensorValue(u_indices, u_values, [BS, TRIGRAM_D])
         doc_in =  tf.SparseTensorValue(n_indices, n_values, [BS, TRIGRAM_D])
-        yield query_in, doc_in, label
+        yield query_in, doc_in #, label
 
 
 
@@ -175,8 +187,14 @@ with tf.Session(config=config) as sess:
         # fp_time += t2 - t1
         # #print(t2-t1)
         # t1 = time.time()
-        query_in, doc_in, label = iter_.next()
-        sess.run(train_step, feed_dict={query_batch: query_in, doc_batch: doc_in, label_batch:label})
+        query_in, doc_in = iter_.next()
+        sess.run(train_step, feed_dict={query_batch: query_in, doc_batch: doc_in}) #, label_batch:label})
+        #print(sess.run(prob, feed_dict={query_batch: query_in, doc_batch: doc_in, label_batch:label}))
+        #print
+        #print(sess.run(weight1))
+        #print
+        #print(sess.run(bias1))
+        #break
         # t2 = time.time()
         # fbp_time += t2 - t1
         # #print(t2 - t1)
@@ -189,7 +207,7 @@ with tf.Session(config=config) as sess:
             end = time.time()
             epoch_loss = 0
             
-            loss_v = sess.run(loss, feed_dict={query_batch: query_in, doc_batch: doc_in, label_batch:label})
+            loss_v = sess.run(loss, feed_dict={query_batch: query_in, doc_batch: doc_in})
             epoch_loss += loss_v
 
             
