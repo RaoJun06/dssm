@@ -203,7 +203,6 @@ with tf.Session(config=config) as sess:
         #     print ("MiniBatch: Average FP Time %f, Average FP+BP Time %f" %
         #        (fp_time / step, fbp_time / step))
 
-        print index_start
         if step % FLAGS.epoch_steps == 0:
             end = time.time()
             epoch_loss = 0
