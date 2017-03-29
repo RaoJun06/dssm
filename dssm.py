@@ -12,15 +12,15 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('summaries_dir', '/tmp/dssm-400-120-relu', 'Summaries directory')
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate.')
 flags.DEFINE_integer('max_steps', 900000, 'Number of steps to run trainer.')
-flags.DEFINE_integer('epoch_steps', 18000, "Number of steps in one epoch.")
+flags.DEFINE_integer('epoch_steps', 10, "Number of steps in one epoch.")
 flags.DEFINE_integer('pack_size', 2000, "Number of batches in one pickle pack.")
 flags.DEFINE_bool('gpu', 1, "Enable GPU or not")
 
 start = time.time()
 
-TRIGRAM_D = 49284
+TRIGRAM_D = 50000
 
-NEG=50
+NEG=10
 BS = 1000
 
 L1_N = 400
@@ -127,21 +127,22 @@ def data_iterator(file):
     """ A simple data iterator """
     index_start = 1
     while True:
-        if (not linecache.getline(file, index_start + BS)):
-            index_start = 1     
         u_indices = []      
         n_indices = []
         labels = []
-        for i in range(index_start, index_start+BS):
-            line = linecache.getline(file, i)
+        for i in range(0, BS):
+            line = linecache.getline(file, index_start+i)
+            if (not line):
+                index_start = -i
+                continue
             label, user, news = line.strip().split('\3')
             labels.append(label)
             us = user.split('\t')
             ns = news.split('\t')
             for j in range(1, len(us)):
-                u_indices.append([i-index_start,us[j]])
+                u_indices.append([i,us[j]])
             for j in range(1, len(ns)):
-                n_indices.append([i-index_start, ns[j]])
+                n_indices.append([i, ns[j]])
         u_values = np.ones(len(u_indices))
         n_values = np.ones(len(n_indices))
         u_indices = np.array(u_indices)
@@ -154,9 +155,9 @@ def data_iterator(file):
         #print label
         query_in = tf.SparseTensorValue(u_indices, u_values, [BS, TRIGRAM_D])
         doc_in =  tf.SparseTensorValue(n_indices, n_values, [BS, TRIGRAM_D])
-        yield query_in, doc_in #, label
 
-
+        index_start += BS
+        yield query_in, doc_in, index_start #, label
 
 config = tf.ConfigProto()  # log_device_placement=True)
 config.gpu_options.allow_growth = True
@@ -187,7 +188,7 @@ with tf.Session(config=config) as sess:
         # fp_time += t2 - t1
         # #print(t2-t1)
         # t1 = time.time()
-        query_in, doc_in = iter_.next()
+        query_in, doc_in, index_start = iter_.next()
         sess.run(train_step, feed_dict={query_batch: query_in, doc_batch: doc_in}) #, label_batch:label})
         #print(sess.run(prob, feed_dict={query_batch: query_in, doc_batch: doc_in, label_batch:label}))
         #print
@@ -202,8 +203,8 @@ with tf.Session(config=config) as sess:
         #     print ("MiniBatch: Average FP Time %f, Average FP+BP Time %f" %
         #        (fp_time / step, fbp_time / step))
 
-
-        if step%50 == 0:
+        print index_start
+        if step % FLAGS.epoch_steps == 0:
             end = time.time()
             epoch_loss = 0
             
@@ -217,5 +218,5 @@ with tf.Session(config=config) as sess:
             # print ("MiniBatch: Average FP Time %f, Average FP+BP Time %f" %
             #        (fp_time / step, fbp_time / step))
             #
-            print ("\nMB #%-5d | Train Loss: %-4.3f | PureTrainTime: %-3.3fs" %
-                    (step, epoch_loss, end - start))
+            print ("\nMiniBatch: %-5d | Train Loss: %-4.3f | PureTrainTime: %-3.3fs | File ptr: %d" %
+                    (step, epoch_loss, end - start, index_start))
