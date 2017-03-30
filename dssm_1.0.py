@@ -47,10 +47,10 @@ def variable_summaries(var, name):
 
 with tf.name_scope('input'):
     # Shape [BS, TRIGRAM_D].
-    query_batch = tf.sparse_placeholder(tf.float32, shape=query_in_shape, name='QueryBatch')
+    query_batch = tf.sparse_placeholder(tf.float32, shape=None, name='QueryBatch')
     # Shape [BS, TRIGRAM_D]
-    doc_batch = tf.sparse_placeholder(tf.float32, shape=doc_in_shape, name='DocBatch')
-    label_batch = tf.sparse_placeholder(tf.float32, shape=label_in_shape, name='LabelBatch')
+    doc_batch = tf.sparse_placeholder(tf.float32, shape=None, name='DocBatch')
+    label_batch = tf.sparse_placeholder(tf.float32, shape=None, name='LabelBatch')
 
 with tf.name_scope('L1'):
     l1_par_range = np.sqrt(6.0 / (TRIGRAM_D + L1_N))
@@ -172,12 +172,11 @@ with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
     train_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/train', sess.graph)
     test_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/test', sess.graph)
-
-    # Actual execution
+    
+    #Actual execution
     start = time.time()
     for step in range(FLAGS.max_steps):
         query_in, doc_in, index_start = iter_train.next()
-        print(query_in)
         sess.run(train_step, feed_dict={query_batch: query_in, doc_batch: doc_in}) #, label_batch:label})
 
         if step % FLAGS.epoch_steps == 0:
@@ -191,9 +190,6 @@ with tf.Session(config=config) as sess:
             train_loss = sess.run(loss_summary, feed_dict={average_loss: epoch_loss})
             train_writer.add_summary(train_loss, step + 1)
 
-            # print ("MiniBatch: Average FP Time %f, Average FP+BP Time %f" %
-            #        (fp_time / step, fbp_time / step))
-            #
             print ("\nMiniBatch: %-5d | Train Loss: %-4.3f | PureTrainTime: %-3.3fs | File ptr: %d" %
                     (step, epoch_loss, end - start, index_start))
 
