@@ -11,10 +11,12 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string('summaries_dir', '/tmp/dssm-400-120-relu', 'Summaries directory')
 flags.DEFINE_float('learning_rate', 0.1, 'Initial learning rate.')
-flags.DEFINE_integer('max_steps', 900000, 'Number of steps to run trainer.')
+flags.DEFINE_integer('max_steps', 500, 'Number of steps to run trainer.')
 flags.DEFINE_integer('epoch_steps', 10, "Number of steps in one epoch.")
 flags.DEFINE_integer('pack_size', 2000, "Number of batches in one pickle pack.")
 flags.DEFINE_bool('gpu', 1, "Enable GPU or not")
+
+model_path = "/home/raojun/tensorflow/model/dssm.model"
 
 start = time.time()
 
@@ -164,7 +166,9 @@ config.gpu_options.allow_growth = True
 #if not FLAGS.gpu:
 #config = tf.ConfigProto(device_count= {'GPU' : 0})
 
-iter_ = data_iterator("train")
+saver = tf.train.Saver()
+iter_train = data_iterator("train")
+iter_test = data_iterator("test")
 with tf.Session(config=config) as sess:
     sess.run(tf.initialize_all_variables())
     train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir + '/train', sess.graph)
@@ -172,36 +176,9 @@ with tf.Session(config=config) as sess:
 
     # Actual execution
     start = time.time()
-    # fp_time = 0
-    # fbp_time = 0
     for step in range(FLAGS.max_steps):
-            # # setup toolbar
-            # sys.stdout.write("[%s]" % (" " * toolbar_width))
-            # #sys.stdout.flush()
-            # sys.stdout.write("\b" * (toolbar_width + 1))  # return to start of line, after '['
-
-
-
-        # t1 = time.time()
-        # sess.run(loss, feed_dict = feed_dict(True, batch_idx))
-        # t2 = time.time()
-        # fp_time += t2 - t1
-        # #print(t2-t1)
-        # t1 = time.time()
-        query_in, doc_in, index_start = iter_.next()
+        query_in, doc_in, index_start = iter_train.next()
         sess.run(train_step, feed_dict={query_batch: query_in, doc_batch: doc_in}) #, label_batch:label})
-        #print(sess.run(prob, feed_dict={query_batch: query_in, doc_batch: doc_in, label_batch:label}))
-        #print
-        #print(sess.run(weight1))
-        #print
-        #print(sess.run(bias1))
-        #break
-        # t2 = time.time()
-        # fbp_time += t2 - t1
-        # #print(t2 - t1)
-        # if batch_idx % 2000 == 1999:
-        #     print ("MiniBatch: Average FP Time %f, Average FP+BP Time %f" %
-        #        (fp_time / step, fbp_time / step))
 
         if step % FLAGS.epoch_steps == 0:
             end = time.time()
@@ -219,3 +196,15 @@ with tf.Session(config=config) as sess:
             #
             print ("\nMiniBatch: %-5d | Train Loss: %-4.3f | PureTrainTime: %-3.3fs | File ptr: %d" %
                     (step, epoch_loss, end - start, index_start))
+
+    save_path = saver.save(sess, model_path)
+    print "Model saved in file: %s" % save_path
+
+    for step in range(10):
+        query_in, doc_in, index_start = iter_test.next()
+        test_loss = sess.run(loss, feed_dict={query_batch: query_in, doc_batch: doc_in}) #, label_batch:label})
+        print ("\nMiniBatch: %-5d | Test Loss: %-4.3f" % (step, test_loss))
+
+    end = time.time()
+    print ("\nTotal time: %-3.3fs" % (end - start))
+  
