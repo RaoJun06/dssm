@@ -135,8 +135,8 @@ def data_iterator(file):
         for i in range(0, BS):
             line = linecache.getline(file, index_start+i)
             if (not line):
-                index_start = -i
-                continue
+                index_start = -i+1
+                line = linecache.getline(file, index_start+i)
             label, user, news = line.strip().split('\3')
             labels.append(label)
             us = user.split('\t')
